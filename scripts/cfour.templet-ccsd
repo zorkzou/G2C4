@@ -1,0 +1,58 @@
+! templet of CFour input: CCSD calculation
+!
+! 1. file_block is optional. If not given, GENBAS and ECPDATA have to be assigned in a script.
+! 2. Cartesian coordinates in Bohr is always used, and therefore the keywords
+!    UNITS=1,COORDINATES=1
+!    have to be defined in calc_block.
+! 3. The keywords CHARGE={C}, MULT={M}, and REFERENCE={R} (i.e. RHF if MULT=1 and UHF otherwise)
+!    may be defined in calc_block to use default settings.
+
+
+$sp
+  file_block
+%GENBAS=/opt/chemsoft/CFour/basis/GENBAS
+%ECPDATA=/opt/chemsoft/CFour/basis/ECPDATA
+  end_of_file
+
+  calc_block
+*CFOUR(CALC=CCSD,BASIS=3-21G,REFERENCE={R}
+UNITS=1,COORDINATES=1,CHARGE={C},MULT={M}
+ABCDTYPE=AOBASIS,CC_PROGRAM=ECC
+FROZEN_CORE=ON,CC_MAXCYC=200
+MEM_UNIT=GB,MEMORY=6)
+  end_of_calc
+
+$grad
+  file_block
+%GENBAS=/opt/chemsoft/CFour/basis/GENBAS
+%ECPDATA=/opt/chemsoft/CFour/basis/ECPDATA
+  end_of_file
+
+  calc_block
+*CFOUR(CALC=CCSD,BASIS=3-21G,REFERENCE={R}
+UNITS=1,COORDINATES=1,CHARGE={C},MULT={M}
+ABCDTYPE=AOBASIS,CC_PROGRAM=ECC
+FROZEN_CORE=ON,CC_MAXCYC=200
+DERIV_LEVEL=1
+MEM_UNIT=GB,MEMORY=6)
+  end_of_calc
+
+$freq
+  file_block
+%GENBAS=/opt/chemsoft/CFour/basis/GENBAS
+%ECPDATA=/opt/chemsoft/CFour/basis/ECPDATA
+  end_of_file
+
+  calc_block
+*CFOUR(CALC=CCSD,BASIS=3-21G,REFERENCE={R}
+UNITS=1,COORDINATES=1,CHARGE={C},MULT={M}
+ABCDTYPE=AOBASIS,CC_PROGRAM=ECC
+FROZEN_CORE=ON,CC_MAXCYC=200
+VIB=ANALYTIC
+MEM_UNIT=GB,MEMORY=6)
+  end_of_calc
+
+
+
+
+

@@ -1,0 +1,15 @@
+%nprocshared=1
+%mem=1gb
+#p external='G2C4/run-cfour.sh' opt freq
+
+UHF, UCCSD, or UCCSDT by changing cfour_templet in run-cfour.sh
+
+0  2
+N
+H 1 r1
+H 1 r1 2 a1
+
+r1 1.0
+a1 106.0
+
+
