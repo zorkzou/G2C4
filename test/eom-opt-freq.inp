@@ -1,0 +1,20 @@
+%nprocshared=1
+%mem=1gb
+#p external='G2C4/run-cfour.sh' opt freq=numer
+
+Set cfour_templet=cfour.templet-eom in run-cfour.sh
+EOM-CCSD has analytic gradients and numerical frequencies.
+
+0  1
+C
+C 1 RCC
+H 1 RCH 2 A
+H 2 RCH 1 A 3 D180
+  Variables:
+RCC=1.36
+RCH=1.08
+A=124.
+  Constants:
+D180=180.
+
+

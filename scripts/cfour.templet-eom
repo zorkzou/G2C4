@@ -1,0 +1,52 @@
+! templet of CFour input: EOM-CCSD calculation
+!
+! This calculation was taken from CFour webpage at
+! http://slater.chemie.uni-mainz.de/cfour/download/eom/zmat.geoccsd
+!
+! 1. Energy calculation ($SP) can be performed. Some methods have also gradients ($GRAD).
+! 2. Only one excited state may be calculated, and otherwise a wrong excitation energy may be obtained in Gaussian.
+! 3. See also cfour.templet-ccsd.
+
+
+$sp
+  file_block
+%GENBAS=/opt/chemsoft/CFour/basis/GENBAS
+%ECPDATA=/opt/chemsoft/CFour/basis/ECPDATA
+  end_of_file
+
+  calc_block
+*CFOUR(CALC=CCSD,BASIS=DZP,REFERENCE={R}
+UNITS=1,COORDINATES=1,CHARGE={C},MULT={M}
+ABCDTYPE=AOBASIS,CC_PROGRAM=ECC,EXCITE=EOMEE
+FROZEN_CORE=OFF,CC_MAXCYC=200
+MEM_UNIT=GB,MEMORY=6)
+
+%excite*
+1
+1
+1 7 0 8 0 1.0
+  end_of_calc
+
+$grad
+  file_block
+%GENBAS=/opt/chemsoft/CFour/basis/GENBAS
+%ECPDATA=/opt/chemsoft/CFour/basis/ECPDATA
+  end_of_file
+
+  calc_block
+*CFOUR(CALC=CCSD,BASIS=DZP,REFERENCE={R}
+UNITS=1,COORDINATES=1,CHARGE={C},MULT={M}
+ABCDTYPE=AOBASIS,CC_PROGRAM=ECC,EXCITE=EOMEE
+FROZEN_CORE=OFF,CC_MAXCYC=200
+ESTATE_CONV=10,CONV=10,SCF_CONV=10,CC_CONV=10,LINEQ_CONV=10,ZETA_CONV=10
+DERIV_LEVEL=1
+MEM_UNIT=GB,MEMORY=6)
+
+%excite*
+1
+1
+1 7 0 8 0 1.0
+  end_of_calc
+
+
+
