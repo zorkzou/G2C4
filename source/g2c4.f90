@@ -102,15 +102,15 @@ program G2C4
       ! gradient and Hessian calculations.
       call ckorder(iCOU,natom,IZAC,XYZC,Scr,ctmp,tag)
 
-      ! rotate the dipole moment vector and gadients to initial orientation
       ! calculate rotation matrix
       call qrotmol(0,6,natom,XYZG,XYZC,RMAT,Scr)
 
+      ! rotate the dipole moment vector and gadients to the initial orientation
       call rotvec(1,-1,RMAT,DIPG,Scr)
       call rotvec(natom,-1,RMAT,GRDG,Scr)
 
       if(nder > 1) then
-        ! rotate hessian, apt, and polar to initial orientation
+        ! rotate hessian, apt, and polar to the initial orientation
         call rothess(natom,-1,RMAT,FCMG,Scr)
         call Sq2Tr(na3,FCMG,Scr)
         call rotmat(natom,-1,RMAT,APTG,Scr)
