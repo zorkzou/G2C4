@@ -9,7 +9,7 @@ where `F90` can be `gfortran`, `pgf90`, `ifort`, or other Fortran 90 compilers.
 
 ## How to run CFour in Gaussian
 
-1. Put g2c4.exe as well as 3 templet files scripts/cfour.templet-* in to a folder. For example, /home/myID/Chemsoft/G2C4
+1. Put g2c4.exe as well as 3 templet files scripts/cfour.templet-* into a folder. For example, /home/myID/Chemsoft/G2C4
 2. Put scripts/run-cfour.sh into your Gaussian calculation folder, and modify run-cfour.sh.
 * Line 4 has to be modified if MRCC is going to be used,
 * Lines 7 to 13 are related to CFour,
