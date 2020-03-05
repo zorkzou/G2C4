@@ -1,6 +1,6 @@
 %mem=1GB
 %nprocshared=1
-# oniom(external='G2C4/run-cfour.sh':b3lyp/3-21g) opt freq
+# oniom(external='./run-cfour.sh':b3lyp/3-21g) opt freq
 
 H2O + C6H6, CCSD:B3LYP calculation (cfour_templet = cfour.templet-ccsd in run-cfour.sh)
 

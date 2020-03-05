@@ -6,11 +6,11 @@
 # CFour 2
 export PATH=/home/Chemsoft/CFour_2.1/bin:$PATH
 export C4SCR=/tmp/Scratch-CFour
+export OMP_NUM_THREADS=2
 #
 rm -rf $C4SCR
 mkdir $C4SCR
 cd $C4SCR
-export OMP_NUM_THREADS=2
 
 # G2C4
 export g2c4dir=/home/Chemsoft/G2C4
