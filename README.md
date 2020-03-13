@@ -17,3 +17,8 @@ where `F90` can be `gfortran`, `pgf90`, `ifort`, or other Fortran 90 compilers.
 3. If necessary, modify the templet file, such as basis set, ECP, occupation, convergence criteria, and so on.
 4. Make a copy of test/opt-freq.inp in your Gaussian calculation folder, and submit a Gaussian job.
 
+## Some tips
+
+1. In the case of single layer system (i.e. without using the `oniom` keyword), the `external` keyword activates the geometry optimization procedure in Cartesian coordinates, which converges quite slow. Z-matrix coordinates with `opt(zmat)` converges much faster. An `oniom` calculation has no such a problem since redundand internal coordinates being used by default.
+
+
