@@ -19,6 +19,6 @@ where `F90` can be `gfortran`, `pgf90`, `ifort`, or other Fortran 90 compilers.
 
 ## Some tips
 
-1. In the case of single layer system (i.e. without using the `oniom` keyword), the `external` keyword activates the geometry optimization procedure in Cartesian coordinates, which converges quite slow. Z-matrix coordinates with `opt(zmat)` converges much faster. An `oniom` calculation has no such a problem since redundand internal coordinates being used by default.
+1. In the case of single layer system (i.e. without using the `oniom` keyword), the `external` keyword activates the geometry optimization procedure in Cartesian coordinates, which converges quite slow. Z-matrix coordinates with `opt(zmat)` converge much faster. The `oniom` calculation has no such a problem since redundand internal coordinates being used by default.
 
 
