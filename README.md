@@ -21,7 +21,5 @@ where `F90` can be `gfortran`, `pgf90`, `ifort`, or other Fortran 90 compilers.
 
 1. In the case of single layer system (i.e. without using the `oniom` keyword), the `external` keyword activates the geometry optimization procedure in Cartesian coordinates, which converges quite slow. Z-matrix coordinates with `opt(zmat)` converge much faster. The `oniom` calculation has no such a problem since redundand internal coordinates being used by default.
 
-2. If both high and low levels in `ONIOM` are computed by CFour (or other external programs), Gaussian optimization procedure may report an error "MOMM, but no IMMCRS" in L103. You may reset `iop(1/18)` to 20 to solve the problem. For example,
-
-`# oniom(external='./run-cfour-high.sh':external='./run-cfour-low.sh') iop(1/18=20) opt`
+2. If both high and low levels in `ONIOM` are computed by CFour (or other external programs), Gaussian optimization procedure may report an error "MOMM, but no IMMCRS" in L103. You may reset `iop(1/18)` to 20 to solve the problem. For example, `# oniom(external='./run-cfour-high.sh':external='./run-cfour-low.sh') iop(1/18=20) opt`
 
