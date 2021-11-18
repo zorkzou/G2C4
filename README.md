@@ -32,7 +32,7 @@ where `F90` can be `gfortran`, `pgf90`, `ifort`, or other Fortran 90 compilers.
 
 4. If necessary, modify the templet file, such as basis set, ECP, occupation, convergence criteria, and so on. The basis set and ECP files may also be defined in the lines 30 to 32 in run-cfour.sh.
 
-5. Make a copy of test/opt-freq.inp in your Gaussian calculation folder, modify the path of run-cfour.sh if necessary, and submit it as a Gaussian job.
+5. Make a copy of test/opt-freq.inp in your Gaussian calculation folder, modify the path of run-cfour.sh in `external=` if necessary, and submit it as a Gaussian job.
 
 ## Some tips
 
