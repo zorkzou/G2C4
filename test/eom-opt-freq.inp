@@ -1,6 +1,6 @@
 %nprocshared=1
 %mem=1gb
-#p external='./run-cfour.sh' opt freq=numer
+#p external='G2C4/run-cfour.sh' opt(nomicro) freq=numer
 
 Set cfour_templet=cfour.templet-eom in run-cfour.sh
 EOM-CCSD has analytic gradients and numerical frequencies.

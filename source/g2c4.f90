@@ -6,6 +6,7 @@
 ! Institute of Modern Physics, Northwest University, Xi'an, China
 !
 ! Feb. 23, 2020
+! Nov. 18, 2021.  1) Reorder atoms. 2) Bug fix in *.EIn for g16.c ONIOM calculation.
 !
 ! 1. CFour ver. 2.00beta and 2.1 have been tested. Old versions do no work.
 ! 2. The Cartesian geometry saved in CFour's ZMAT file is in Bohr, thus UNITS=1,COORDINATES=1 should always be set up.
@@ -19,7 +20,7 @@ program G2C4
   character*200 :: ctmp,tag
   allocatable   :: IZAG(:), XYZG(:), DIPG(:), POLG(:), APTG(:), GRDG(:), FCMG(:)
   allocatable   :: IZAC(:), XYZC(:), DIPC(:), POLC(:), APTC(:), GRDC(:), FCMC(:)
-  allocatable   :: RMAT(:), Scr(:)
+  allocatable   :: MAPA(:), RMAT(:), Scr(:)
 
 !---------------------------------------------------------------------------------------------------------------------------------
 ! 1. read arguments
@@ -96,11 +97,17 @@ program G2C4
 
     if(nder > 0) then
 
-      allocate(RMAT(9), Scr(ntt))
+      allocate(MAPA(natom), RMAT(9), Scr(ntt))
 
-      ! Check: symmetry-equivalent atoms may be reordered by CFour if symmetry being used, which may lead to wrong results in
-      ! gradient and Hessian calculations.
-      call ckorder(iCOU,natom,IZAC,XYZC,Scr,ctmp,tag)
+      ! Check: symmetry-equivalent atoms may be reordered by CFour if symmetry being used.
+      ! The atomic ordering is saved in MAPA.
+      call ckorder(6,iCOU,natom,MAPA,IZAC,XYZC,ctmp,tag)
+
+      call reordera(1, natom, MAPA, GRDG)
+      if(nder > 1 .and. natom > 1) then
+        call reordera(2, natom, MAPA, FCMG)
+        call reordera(3, natom, MAPA, APTG)
+      end if
 
       ! calculate rotation matrix
       call qrotmol(0,6,natom,XYZG,XYZC,RMAT,Scr)
@@ -118,7 +125,7 @@ program G2C4
         call Sq2Tr(3,POLG,Scr)
       end if
 
-      deallocate(RMAT, Scr)
+      deallocate(MAPA, RMAT, Scr)
     end if
 
   else
@@ -139,17 +146,88 @@ program G2C4
 
   end if
 
-end
+end program G2C4
+
+!%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+!
+! reorder atoms in coordinates or gradients (ider=1), Hessians (ider=2), and APT (ider=3)
+!
+!%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+subroutine reordera(ider, natm, matm, dat)
+  implicit real(kind=8) (a-h,o-z)
+  dimension  :: matm(natm), dat(*)
+  allocatable   :: scr(:)
+
+  if(natm> 1 .and. ider == 1) then
+    allocate(scr(natm*3))
+    call reorderg(natm, matm, dat, scr)
+  else if(natm> 1 .and. ider == 2) then
+    allocate(scr(natm*natm*9))
+    call reorderh(natm, matm, dat, scr)
+  else if(natm> 1 .and. ider == 3) then
+    allocate(scr(natm*9))
+    call reorderd(natm, matm, dat, scr)
+  end if
+
+  deallocate(scr)
+  return
+
+  contains
+
+  subroutine reorderg(natm, matm, grad1, grad2)
+    implicit real(kind=8) (a-h,o-z)
+    dimension  :: matm(natm), grad1(3,natm), grad2(3,natm)
+
+    do i=1,natm
+      grad2(:,i) = grad1(:,matm(i))
+    end do
+    grad1 = grad2
+
+    return
+  end subroutine reorderg
+
+  subroutine reorderh(natm, matm, hess1, hess2)
+    implicit real(kind=8) (a-h,o-z)
+    dimension  :: matm(natm), hess1(3,natm,3,natm), hess2(3,natm,3,natm)
+
+    do i=1,natm
+      hess2(:,:,:,i) = hess1(:,:,:,matm(i))
+    end do
+
+    do i=1,natm
+      hess2(:,i,:,:) = hess1(:,matm(i),:,:)
+    end do
+
+    hess1 = hess2
+
+    return
+  end subroutine reorderh
+
+  subroutine reorderd(natm, matm, apt1, apt2)
+    implicit real(kind=8) (a-h,o-z)
+    dimension  :: matm(natm), apt1(9,natm), apt2(9,natm)
+
+    do i=1,natm
+      apt2(:,i) = apt1(:,matm(i))
+    end do
+    apt1 = apt2
+
+    return
+  end subroutine reorderd
+
+end subroutine reordera
 
 !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 !
 ! Check whether symmetry-equivalent atoms have been reordered by CFour.
 !
 !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-subroutine ckorder(iCOU,natom,IZA,XYZ,Scr,ctmp,tag)
+subroutine ckorder(iout,iCOU,natom,MAPA,IZA,XYZ,ctmp,tag)
   implicit real(kind=8) (a-h,o-z)
-  dimension :: IZA(natom), XYZ(3,natom), Scr(3)
+  dimension :: MAPA(natom), IZA(natom), XYZ(3,natom)
   character*100 :: ctmp,tag
+  allocatable   :: iza1(:), xyz1(:,:)
+  logical :: reordered
 
   rewind(iCOU)
   tag=' Z-matrix   Atomic            Coordinates (in bohr)'
@@ -162,16 +240,72 @@ subroutine ckorder(iCOU,natom,IZA,XYZ,Scr,ctmp,tag)
   read(iCOU,"(/)",iostat=ist)
     if(ist /= 0) call XError("Please check Cartesian coordinates in the CFour output file.")
 
+  ! IZA & XYZ: shifted and reordered coordinates from GRD
+  ! IZA1 & XYZ1: shifted coordinates in input ordering
+  reordered = .false.
+  allocate(iza1(natom), xyz1(3,natom))
   do i=1,natom
+    MAPA(i) = i
     read(iCOU,"(a100)",iostat=ist) ctmp
       if(ist /= 0) call XError("Please check Cartesian coordinates in the CFour output file.")
-    read(ctmp(13:),*) IZtmp, Scr
-    if(IZtmp < 1) call XError("Dummy atom or ghost atom cannot be used.")
-    if(IZtmp /= IZA(i) .or. distance(XYZ(1,i),Scr) > 1.d-6) call XError("Atoms have been reordered in the CFour calculation.")
+    read(ctmp(13:),*) iza1(i), xyz1(:,i)
+    if(iza1(i) < 1) call XError("Dummy atom or ghost atom cannot be used.")
+    if(iza1(i) /= IZA(i) .or. distance(XYZ(1,i),xyz1(1,i)) > 1.d-6) then
+      ! Atoms have been reordered in the CFour calculation
+      reordered = .true.
+    end if
   end do
+
+  if(reordered) then
+    call mapatm(natom, iza1, IZA, xyz1, XYZ, MAPA, ierr)
+    if(ierr /= 0) then
+      write(iout,"('  The equivalent atom for iatom =',i3,' cannot be found.')") ierr
+      write(iout,"('  A temporary solution is to reorder the input atoms manually.')")
+      call XError("Error in sub. mapatm.")
+    end if
+  end if
+
+  deallocate(iza1, xyz1)
 
   return
 end
+
+!%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+!
+! Determine the map relationship between reference (1) and target (2) atoms
+! It's assumed that CFour shifts, reorders, but doen't rotate the atoms.
+!
+!%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+subroutine mapatm(natm, iza1, iza2, xyz1, xyz2, matm, ierr)
+  implicit real(kind=8) (a-h,o-z)
+  parameter(dtol = 0.1d-4)
+  dimension  :: iza1(natm), iza2(natm), xyz1(3,natm), xyz2(3,natm), matm(natm)
+
+  ierr = 0
+
+  if(natm < 2) then
+    matm(1) = 1
+    return
+  end if
+
+  loop1 : do i=1,natm
+    loop2 : do j=1,natm
+      if(iza1(i) /= iza2(j)) cycle
+
+      if(distance(xyz1(1,i),xyz2(1,j)) <= dtol) then
+        matm(i) = j
+        exit loop2
+      end if
+    end do loop2
+
+    if(matm(i) == 0) then
+      ierr = i
+      exit loop1
+    end if
+  end do loop1
+
+  return
+end subroutine mapatm
 
 !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 !
@@ -240,7 +374,7 @@ subroutine WrtCar(iCTP,iCIN,natom,nder,icharge,multi,IZA,XYZ,ctmp)
 
       ! Cartesian geometry
       do i=1,natom
-        call ElemZA(1,ctmp,IZA(i),ctmp)
+        call ElemZA(ctmp,IZA(i))
         write(iCIN,"(a3,3f20.12)") ctmp(1:3), XYZ(:,i)
       end do
 
@@ -1095,27 +1229,41 @@ End
 
 !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 !
-! read Cartesian coordinates (in a.u.) from Gaussian's *.EIn
+! read Cartesian coordinates (in a.u.) from Gaussian's *.EIn. Fixed for G16.c ONIOM calculation.
 !
 !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 Subroutine RdEIn_XYZ(iGIN,natom,IZA,XYZ)
   Implicit Real*8(A-H,O-Z)
   dimension :: IZA(natom), XYZ(3,natom)
+  allocatable :: Scr(:)
 
   IZA = 0
   XYZ = 0.0d0
 
-  do i = 1, natom
-    read(iGIN,*,iostat=ist) IZA(i), XYZ(:,i)
-    if(ist /=0) call XError("Please check the Cartesian coordinates in *.EIn.")
+  allocate(Scr(3))
+
+  rewind(iGIN)
+  read(iGIN,*) natom1
+  i1 = 0
+  do i = 1, natom1
+    read(iGIN,*,iostat=ist) iza1, Scr
+    if(ist /= 0) call XError("Please check the Cartesian coordinates in *.EIn.")
+    if(iza1 > 0) then
+      i1 = i1 + 1
+      IZA(i1) = iza1
+      XYZ(:,i1) = Scr
+    end if
   end do
+
+  deallocate(Scr)
+  if(i1 /= natom) call XError("Wrong natom in *.EIn.")
 
   Return
 End
 
 !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 !
-! read the first line of Gaussian's *.EIn
+! read the first line of Gaussian's *.EIn. Fixed for G16.c ONIOM calculation.
 !
 !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 Subroutine RdEIn_Line1(iGIN,natom,nder,icharge,multi)
@@ -1133,6 +1281,14 @@ Subroutine RdEIn_Line1(iGIN,natom,nder,icharge,multi)
   if(natom < 1) call XError("Natom < 1.")
   if(nder < 0 .or. nder > 2) call XError("Nder is out of range.")
   if(multi < 1) call XError("Multi cannot be smaller than 1.")
+
+  ! G16.c's ONIOM calculation also prints dummy atoms, which has to be fixed.
+  natom1 = 0
+  do i=1, natom
+    read(iGIN,*) i1
+    if(i1 > 0) natom1 = natom1 + 1
+  end do
+  natom = natom1
 
   Return
 End
@@ -1437,11 +1593,10 @@ end
 
 !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 !
-! Mode = 0 : returns nuclear charge zchar for an element symbol "el"; iza is not used.
-!     /= 0 : returns element symbol "el" for nuclear charge iza; zchar is not used.
+! Returns element symbol "el" for nuclear charge iza.
 !
 !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-subroutine ElemZA(Mode,el,iza,zchar)
+subroutine ElemZA(el,iza)
   implicit real(kind=8) (a-h,o-z)
   parameter (maxza=120)
   character*3 :: el,atomlib(maxza)
@@ -1454,24 +1609,9 @@ subroutine ElemZA(Mode,el,iza,zchar)
    'MD ','NO ','LR ','RF ','DB ','SG ','BH ','HS ','MT ','DS ',   'RG ','CN ','NH ','FL ','MC ','LV ','TS ','OG ','UUE','UBN'/
   save atomlib
 
-  if (Mode == 0) then
-
-    call charl2u(el)
-    zchar = 0.d0
-    do i=1,maxza
-      if(index(el,atomlib(i)) /= 0)then
-        zchar = dble(i)
-        exit
-      end if
-    end do
-
-  else
-
-    el = "???"
-    if(iza > 0 .and. iza <= maxza) el = adjustl(atomlib(iza))
-    call charu2l(el(2:3))
-
-  end if
+  el = "???"
+  if(iza > 0 .and. iza <= maxza) el = adjustl(atomlib(iza))
+  call charu2l(el(2:3))
 
   return
 end

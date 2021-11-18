@@ -27,6 +27,10 @@ export cfour_fcm=$cfour_scr/FCMFINAL
 export cfour_apt=$cfour_scr/DIPDER
 export cfour_pol=$cfour_scr/POLAR
 
+# GENBAS and ECPDATA
+#cp /path/my.BAS.file  $C4SCR/GENBAS
+#cp /path/my.ECP.file  $C4SCR/ECPDATA
+
 # generate CFour input file
 $g2c4dir/g2c4.exe -g2c -gin $gaussian_ein -ctp $cfour_templet -cin $cfour_zmt
 
