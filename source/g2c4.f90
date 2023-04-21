@@ -7,6 +7,7 @@
 !
 ! Feb. 23, 2020
 ! Nov. 18, 2021.  1) Reorder atoms. 2) Bug fix in *.EIn for g16.c ONIOM calculation.
+! Apr. 21, 2023.  Bug fix for ONIOM by G16.c.
 !
 ! 1. CFour ver. 2.00beta and 2.1 have been tested. Old versions do no work.
 ! 2. The Cartesian geometry saved in CFour's ZMAT file is in Bohr, thus UNITS=1,COORDINATES=1 should always be set up.
@@ -20,7 +21,7 @@ program G2C4
   character*200 :: ctmp,tag
   allocatable   :: IZAG(:), XYZG(:), DIPG(:), POLG(:), APTG(:), GRDG(:), FCMG(:)
   allocatable   :: IZAC(:), XYZC(:), DIPC(:), POLC(:), APTC(:), GRDC(:), FCMC(:)
-  allocatable   :: MAPA(:), RMAT(:), Scr(:)
+  allocatable   :: MAPA(:), RMAT(:), List(:), Scr(:)
 
 !---------------------------------------------------------------------------------------------------------------------------------
 ! 1. read arguments
@@ -30,10 +31,10 @@ program G2C4
 !---------------------------------------------------------------------------------------------------------------------------------
 ! 2. read *.EIn
 !---------------------------------------------------------------------------------------------------------------------------------
-  call RdEIn_Line1(iGIN,natom,nder,icharge,multi)
+  call RdEIn_Line1(iGIN,natom,natall,nder,icharge,multi)
   na3 = 3*natom
-  allocate(IZAG(natom), XYZG(na3))
-  call RdEIn_XYZ(iGIN,natom,IZAG,XYZG)
+  allocate(IZAG(natom), XYZG(na3), List(natall))
+  call RdEIn_XYZ(iGIN,natom,natall,IZAG,XYZG,List)
 
 !---------------------------------------------------------------------------------------------------------------------------------
 ! 3. set array length
@@ -119,10 +120,10 @@ program G2C4
       if(nder > 1) then
         ! rotate hessian, apt, and polar to the initial orientation
         call rothess(natom,-1,RMAT,FCMG,Scr)
-        call Sq2Tr(na3,FCMG,Scr)
+        call Sqr2LTsav(na3,FCMG,Scr)
         call rotmat(natom,-1,RMAT,APTG,Scr)
         call rotmat(1,-1,RMAT,POLG,Scr)
-        call Sq2Tr(3,POLG,Scr)
+        call Sqr2LTsav(3,POLG,Scr)
       end if
 
       deallocate(MAPA, RMAT, Scr)
@@ -139,7 +140,11 @@ program G2C4
 ! 6. Generate Gaussian's *.EOu file (Imode = 1) or CFour's ZMAT file (Imode = 0)
 !---------------------------------------------------------------------------------------------------------------------------------
   if(Imode == 1) then
-    call WrtEOU(iGOU,nder,natom,Energy,DIPG,GRDG,FCMG,APTG,POLG)
+    if(natom == natall) then
+      call WrtEOU(iGOU,nder,natom,Energy,DIPG,GRDG,FCMG,APTG,POLG)
+    else   ! ONIOM by g16.c
+      call WrtEOU_ONIOM(iGOU,nder,natom,natall,Energy,DIPG,GRDG,FCMG,APTG,POLG,List)
+    end if
 
   else
     call WrtCar(iCTP,iCIN,natom,nder,icharge,multi,IZAC,XYZC,ctmp)
@@ -408,26 +413,63 @@ end
 
 !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 !
-! symmetric square matrix --> lower triangular matrix
+! symmetric square matrix (S) --> lower triangular matrix (S)
 !
 !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-subroutine Sq2Tr(N,S,Scr)
+subroutine Sqr2LTsav(N,S,Scr)
   implicit real(kind=8) (a-h,o-z)
   real(kind=8) :: Scr(*),S(N,N)
 
-  ntt = N*(N+1)/2
-  ii=0
-  Do i=1,N
-    Do j=1,i
-      ii=ii+1
-      Scr(ii)=(S(j,i)+S(i,j))*0.5d0
-    end Do
-  end Do
+  call Sqr2LT(N,S,Scr)
 
+  ntt = N*(N+1)/2
   call Copy(ntt,Scr,S)
 
   return
-end
+end subroutine Sqr2LTsav
+
+!%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+!
+! symmetric square matrix (S) --> lower triangular matrix (T)
+!
+!%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+subroutine Sqr2LT(N,S,T)
+ implicit real(kind=8) (a-h,o-z)
+ real(kind=8) :: T(*),S(N,N)
+
+ ii=0
+ Do i=1,N
+   Do j=1,i
+     ii=ii+1
+     T(ii)=(S(j,i)+S(i,j))*0.5d0
+   end Do
+ end Do
+
+ return
+end subroutine Sqr2LT
+
+!%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+!
+! lower triangular matrix --> symmetric square matrix
+!
+!%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+subroutine LT2Sqr(N,T,S)
+  implicit real(kind=8) (a-h,o-z)
+  real(kind=8) :: T(*),S(N,N)
+
+  k=0
+  do i=1,N
+    do j=1,i-1
+      k=k+1
+      S(j,i)=T(k)
+      S(i,j)=T(k)
+    end do
+    k=k+1
+    S(i,i)=T(k)
+  end do
+
+  return
+end subroutine LT2Sqr
 
 !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 !
@@ -863,30 +905,33 @@ SUBROUTINE CJCBJ(N,A,V)
   DIMENSION A(N,N), V(N,N)
   INTEGER P,Q
 
-  DO 20 I=1,N
+  DO I=1,N
     V(I,I)=One
-    DO 10 J=1,N
+    DO J=1,N
       IF (I /= J) V(I,J)=Zero
-    10  CONTINUE
-  20  CONTINUE
+    END DO
+  END DO
   FF=Zero
 
-  DO 500 I=2,N
-  DO 500 J=1,I-1
-  500  FF=FF+A(I,J)*A(I,J)
+  DO I=2,N
+    DO J=1,I-1
+      FF=FF+A(I,J)*A(I,J)
+    END DO
+  END DO
 
 !ooo  FF=SQRT(Two*FF)
   FF=SQRT(Two*ABS(FF))
   205  FF=FF/(One*N)
-  25  DO 30 I=2,N
-  DO 30 J=1,I-1
+  25 DO I=2,N
+     DO J=1,I-1
 !ooo    IF (ABS(A(I,J)) >= FF) THEN
-    IF ((ABS(A(I,J)) - FF) >= EPS) THEN
-      P=I
-      Q=J
-      GOTO 600
-    END IF
-  30  CONTINUE
+        IF ((ABS(A(I,J)) - FF) >= EPS) THEN
+           P=I
+           Q=J
+           GOTO 600
+        END IF
+     END DO
+  END DO
 
   IF (FF >= EPS) GOTO 205
   goto 1000
@@ -904,27 +949,27 @@ SUBROUTINE CJCBJ(N,A,V)
   A(P,Q)=Zero
   A(Q,P)=Zero
 
-  DO 60 J=1,N
+  DO J=1,N
     IF ((J /= P).AND.(J /= Q)) THEN
       FM=A(P,J)
       A(P,J)= FM*CN+A(Q,J)*SN
       A(Q,J)=-FM*SN+A(Q,J)*CN
     END IF
-  60  CONTINUE
+  END DO
 
-  DO 70 I=1,N
+  DO I=1,N
     IF ((I /= P).AND.(I /= Q)) THEN
       FM=A(I,P)
       A(I,P)= FM*CN+A(I,Q)*SN
       A(I,Q)=-FM*SN+A(I,Q)*CN
     END IF
-  70  CONTINUE
+  END DO
 
-  DO 80 I=1,N
+  DO I=1,N
     FM=V(I,P)
     V(I,P)= FM*CN+V(I,Q)*SN
     V(I,Q)=-FM*SN+V(I,Q)*CN
-  80  CONTINUE
+  END DO
 
   GOTO 25
 
@@ -934,7 +979,7 @@ SUBROUTINE CJCBJ(N,A,V)
   call eigsrt(N,A,V)
 
   RETURN
-END
+END SUBROUTINE CJCBJ
 
 !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 ! Sort eigenvectors and eigenvalues.
@@ -1078,7 +1123,127 @@ Subroutine WrtEOU(iGOU,nder,natom,Energy,DIP,GRD,FCM,APT,POL)
   end if
 
   Return
-End
+End Subroutine WrtEOU
+
+!%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+!
+! Write Gaussian's *.EOu file for ONIOM job by G16.c
+!
+!%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+Subroutine WrtEOU_ONIOM(iGOU,nder,natom,natall,Energy,DIP,GRD,FCM,APT,POL,List)
+  Implicit Real*8(A-H,O-Z)
+  dimension :: DIP(*), GRD(*), FCM(*), APT(*), POL(*), List(natall)
+  allocatable :: GRDall(:), APTall(:), FCMall(:)
+
+  na3 = natall*3
+  ntt = na3*(na3+1)/2
+
+  rewind(iGOU)
+  if(nder == 0) then
+    ! energy, dipole moment
+    write(iGOU,"(4d20.12)") Energy, (0.0d0, i=1,3)
+    ! gradients
+    write(iGOU,"(3d20.12)") (0.0d0, i=1,na3)
+    ! polarizability (l.t. part)
+    write(iGOU,"(3d20.12)") (0.0d0, i=1,6)
+    ! apt
+    write(iGOU,"(3d20.12)") (0.0d0, i=1,3*na3)
+    ! hessian matrix (l.t. part)
+    write(iGOU,"(3d20.12)") (0.0d0, i=1,ntt)
+
+  else if(nder == 1) then
+    allocate(GRDall(na3))
+    ! energy, dipole moment
+    write(iGOU,"(4d20.12)") Energy, (DIP(i), i=1,3)
+    ! gradients
+    call FillGRD(3,natom,natall,List,GRD,GRDall)
+    write(iGOU,"(3d20.12)") (GRDall(i), i=1,na3)
+    ! polarizability (l.t. part)
+    write(iGOU,"(3d20.12)") (0.0d0, i=1,6)
+    ! apt
+    write(iGOU,"(3d20.12)") (0.0d0, i=1,3*na3)
+    ! hessian matrix (l.t. part)
+    write(iGOU,"(3d20.12)") (0.0d0, i=1,ntt)
+    deallocate(GRDall)
+
+  else if(nder == 2) then
+    allocate(GRDall(na3),APTall(3*na3),FCMall(ntt))
+    ! energy, dipole moment
+    write(iGOU,"(4d20.12)") Energy, (DIP(i), i=1,3)
+    ! gradients
+    call FillGRD(3,natom,natall,List,GRD,GRDall)
+    write(iGOU,"(3d20.12)") (GRDall(i), i=1,na3)
+    ! polarizability (l.t. part)
+    write(iGOU,"(3d20.12)") (POL(i), i=1,6)
+    ! apt
+    call FillGRD(9,natom,natall,List,APT,APTall)
+    write(iGOU,"(3d20.12)") (APTall(i), i=1,3*na3)
+    ! hessian matrix (l.t. part)
+    call FillFCM(natom,natall,List,FCM,FCMall)
+    write(iGOU,"(3d20.12)") (FCMall(i), i=1,ntt)
+    deallocate(GRDall,APTall,FCMall)
+
+  end if
+
+  Return
+End Subroutine WrtEOU_ONIOM
+
+!%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+!
+! fill the force constant matrix
+!
+!%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+Subroutine FillFCM(n1,n2,List,f1,f2)
+  Implicit Real*8(A-H,O-Z)
+  dimension :: List(n2), f1(*), f2(*)
+  allocatable :: fm1(:,:,:,:), fm2(:,:,:,:)
+
+  allocate(fm1(3,n1,3,n1), fm2(3,n2,3,n2))
+
+  call LT2Sqr(n1*3,f1,fm1)
+
+  fm2 = 0.0d0
+
+  i1 = 0
+  do i2 = 1, n2
+    if(List(i2) == 0) cycle
+    i1 = i1 + 1
+
+    j1 = 0
+    do j2 = 1, n2
+      if(List(j2) == 0) cycle
+      j1 = j1 + 1
+      fm2(:,j2,:,i2) = fm1(:,j1,:,i1)
+    end do
+  end do
+
+  call Sqr2LT(n2*3,fm2,f2)
+
+  deallocate(fm1, fm2)
+
+  Return
+End Subroutine FillFCM
+
+!%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+!
+! fill the gradient or APT array
+!
+!%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+Subroutine FillGRD(m,n1,n2,List,g1,g2)
+  Implicit Real*8(A-H,O-Z)
+  dimension :: List(n2), g1(m,n1), g2(m,n2)
+
+  g2 = 0.0d0
+
+  i1 = 0
+  do i2 = 1, n2
+    if(List(i2) == 0) cycle
+    i1 = i1 + 1
+    g2(:,i2) = g1(:,i1)
+  end do
+
+  Return
+End Subroutine FillGRD
 
 !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 !
@@ -1232,26 +1397,28 @@ End
 ! read Cartesian coordinates (in a.u.) from Gaussian's *.EIn. Fixed for G16.c ONIOM calculation.
 !
 !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-Subroutine RdEIn_XYZ(iGIN,natom,IZA,XYZ)
+Subroutine RdEIn_XYZ(iGIN,natom,natall,IZA,XYZ,List)
   Implicit Real*8(A-H,O-Z)
-  dimension :: IZA(natom), XYZ(3,natom)
+  dimension :: IZA(natom), XYZ(3,natom), List(natall)
   allocatable :: Scr(:)
 
   IZA = 0
   XYZ = 0.0d0
+  List= 0
 
   allocate(Scr(3))
 
   rewind(iGIN)
-  read(iGIN,*) natom1
+  read(iGIN,*)
   i1 = 0
-  do i = 1, natom1
+  do i = 1, natall
     read(iGIN,*,iostat=ist) iza1, Scr
     if(ist /= 0) call XError("Please check the Cartesian coordinates in *.EIn.")
     if(iza1 > 0) then
       i1 = i1 + 1
       IZA(i1) = iza1
       XYZ(:,i1) = Scr
+      List(i) = 1
     end if
   end do
 
@@ -1259,39 +1426,38 @@ Subroutine RdEIn_XYZ(iGIN,natom,IZA,XYZ)
   if(i1 /= natom) call XError("Wrong natom in *.EIn.")
 
   Return
-End
+End Subroutine RdEIn_XYZ
 
 !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 !
 ! read the first line of Gaussian's *.EIn. Fixed for G16.c ONIOM calculation.
 !
 !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-Subroutine RdEIn_Line1(iGIN,natom,nder,icharge,multi)
+Subroutine RdEIn_Line1(iGIN,natom,natall,nder,icharge,multi)
   Implicit Real*8(A-H,O-Z)
 
   rewind(iGIN)
 
-  natom=-1
+  natall=-1
   nder=-1
   icharge=-1
   multi=-1
 
-  read(iGIN,*,iostat=ist) natom,nder,icharge,multi
+  read(iGIN,*,iostat=ist) natall,nder,icharge,multi
   if(ist /=0) call XError("Please check the first line in *.EIn.")
-  if(natom < 1) call XError("Natom < 1.")
+  if(natall < 1) call XError("Natall < 1.")
   if(nder < 0 .or. nder > 2) call XError("Nder is out of range.")
   if(multi < 1) call XError("Multi cannot be smaller than 1.")
 
   ! G16.c's ONIOM calculation also prints dummy atoms, which has to be fixed.
-  natom1 = 0
-  do i=1, natom
+  natom = 0
+  do i=1, natall
     read(iGIN,*) i1
-    if(i1 > 0) natom1 = natom1 + 1
+    if(i1 > 0) natom = natom + 1
   end do
-  natom = natom1
 
   Return
-End
+End Subroutine RdEIn_Line1
 
 !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 !

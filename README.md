@@ -1,7 +1,11 @@
 # G2C4
-G2C4 is an interface program between [Gaussian](http://www.gaussian.com/) and [CFour](http://www.cfour.de/) (ver. 2.00beta or 2.1) via the `external` keyword of [Gaussian](http://www.gaussian.com/). [MRCC](http://www.mrcc.hu/) may also be used through [CFour](http://www.cfour.de/).
+G2C4 is an interface program between [Gaussian](http://www.gaussian.com/) and [CFour](http://www.cfour.de/) (ver. 2.00beta or 2.1) via the `External` keyword of [Gaussian](http://www.gaussian.com/). [MRCC](http://www.mrcc.hu/) may also be used through [CFour](http://www.cfour.de/).
 
 ## Recent Changes
+
+04/21/2023
+
+1. Bug fix for the `ONIOM` calculation by Gaussian 16.c.
 
 11/18/2021
 
@@ -17,7 +21,7 @@ G2C4 is an interface program between [Gaussian](http://www.gaussian.com/) and [C
 
     > F90 -O3 g2c4.f90 -o g2c4.exe
 
-where `F90` can be `gfortran`, `pgf90`, `ifort`, or other Fortran 90 compilers.
+where `F90` can be `gfortran`, `nvf90` (`pgf90`), `ifort`, or other Fortran 90 compilers.
 
 ## How to run CFour in Gaussian
 
@@ -36,15 +40,13 @@ where `F90` can be `gfortran`, `pgf90`, `ifort`, or other Fortran 90 compilers.
 
 ## Some tips
 
-1. In the case of single layer system (i.e. without using the `oniom` keyword), the `external` keyword activates the geometry optimization procedure with MM microiterations, which converges quite slow. `opt(zmat)` (for Z-matrix coordinates only!) and `opt(nomicro)` converge much faster. The `oniom` calculation has no such a problem since redundand internal coordinates being used by default.
+1. In the case of single layer system (i.e. without using the `ONIOM` keyword), the `External` keyword activates the geometry optimization procedure with MM microiterations, which converges quite slow. `OPT(zmat)` (for Z-matrix coordinates only!) and `OPT(nomicro)` converge much faster. The `ONIOM` calculation has no such a problem since redundand internal coordinates being used by default.
 
-2. If both high and low levels in `ONIOM` are computed by CFour (or other external programs), Gaussian optimization procedure may report an error "MOMM, but no IMMCRS" in L103. You may use `opt(nomicro)` or reset `iop(1/18)` to 20 to solve the problem. For example, `# oniom(external='./run-cfour-high.sh':external='./run-cfour-low.sh') iop(1/18=20) opt`
+2. If both high and low layers in `ONIOM` are computed by CFour (or other external programs), Gaussian optimization procedure may report an error "MOMM, but no IMMCRS" in L103. You may use `OPT(nomicro)` or reset `IOP(1/18)` to 20 to solve the problem. For example, `# ONIOM(External='./run-cfour-high.sh':External='./run-cfour-low.sh') IOP(1/18=20) OPT`
 
 ## Known problems
 
-1. In the case of `ONIOM` by Gaussian 16.a (and maybe earlier revisions), `opt` and `freq` have to be calculated separately through this interface.
+1. In the case of `ONIOM` by Gaussian 16.a (and maybe earlier revisions), `OPT` and `FREQ` have to be calculated separately through this interface.
 
-2. In the case of `ONIOM` by Gaussian 16.c, this interface does not work and will be fixed in the future.
-
-3. If CFour cannot read ECPDATA defined by `%ECPDATA=...`, this file has to be provided in run-cfour.sh (line 32).
+2. If CFour cannot read ECPDATA defined by `%ECPDATA=...`, this file has to be provided in run-cfour.sh (line 32).
 
