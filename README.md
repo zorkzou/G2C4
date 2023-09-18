@@ -3,6 +3,10 @@ G2C4 is an interface program between [Gaussian](http://www.gaussian.com/) and [C
 
 ## Recent Changes
 
+09/19/2023
+
+1. The script `run-cfour.sh` has been updated. The initial guess of Hartree-Fock may be read from an old `JOBARC` file by default to speed up SCF convergence.
+
 04/21/2023
 
 1. Bug fix for the `ONIOM` calculation by Gaussian 16.c.

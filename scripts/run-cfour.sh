@@ -7,9 +7,10 @@
 export PATH=/home/Chemsoft/CFour_2.1/bin:$PATH
 export C4SCR=/tmp/Scratch-CFour
 export OMP_NUM_THREADS=2
-#
+# comment out this line if initial guess of SCF is read from JOBARC (useful for OPT and FREQ calculations)
 rm -rf $C4SCR
-mkdir $C4SCR
+#
+mkdir -p $C4SCR
 cd $C4SCR
 
 # G2C4
