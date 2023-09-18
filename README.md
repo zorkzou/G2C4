@@ -33,12 +33,12 @@ where `F90` can be `gfortran`, `nvf90` (`pgf90`), `ifort`, or other Fortran 90 c
 
 2. Put scripts/run-cfour.sh into your Gaussian calculation folder, and modify run-cfour.sh.
 * Line 4 has to be modified if MRCC is going to be used,
-* Lines 7 to 13 are related to CFour,
-* Lines 15 to 28 are related to G2C4, where cfour_templet specifies the templet file used for CFour calculations. Change it to $g2c4dir/cfour.templet-ccsd, for example.
+* Lines 7 to 14 are related to CFour,
+* Lines 16 to 29 are related to G2C4, where cfour_templet specifies the templet file used for CFour calculations. Change it to $g2c4dir/cfour.templet-ccsd, for example.
 
 3. Don't forget to add the execute permission to run-cfour.sh: chmod +x run-cfour.sh
 
-4. If necessary, modify the templet file, such as basis set, ECP, occupation, convergence criteria, and so on. The basis set and ECP files may also be defined in the lines 30 to 32 in run-cfour.sh.
+4. If necessary, modify the templet file, such as basis set, ECP, occupation, convergence criteria, and so on. The basis set and ECP files may also be defined in the lines 31 to 33 in run-cfour.sh.
 
 5. Make a copy of test/opt-freq.inp in your Gaussian calculation folder, modify the path of run-cfour.sh in `external=` if necessary, and submit it as a Gaussian job.
 
@@ -52,5 +52,5 @@ where `F90` can be `gfortran`, `nvf90` (`pgf90`), `ifort`, or other Fortran 90 c
 
 1. In the case of `ONIOM` by Gaussian 16.a (and maybe earlier revisions), `OPT` and `FREQ` have to be calculated separately through this interface.
 
-2. If CFour cannot read ECPDATA defined by `%ECPDATA=...`, this file has to be provided in run-cfour.sh (line 32).
+2. If CFour cannot read ECPDATA defined by `%ECPDATA=...`, this file has to be provided in run-cfour.sh (line 33).
 
